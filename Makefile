@@ -11,7 +11,7 @@ test-unit:
 	python -m unittest discover tests
 
 test-format: ## Check formatting
-	black --check --diff .
+	black --check --diff ./slackcli ./tests
 
 format: ## Format all code
 	black ./slackcli ./tests

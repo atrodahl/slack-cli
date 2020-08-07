@@ -1,9 +1,10 @@
 import json
+
 import websocket
 
+from . import messaging
 from . import names
 from . import slack
-from . import messaging
 
 
 def receive(sources):

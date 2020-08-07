@@ -1,6 +1,7 @@
 from __future__ import unicode_literals
-from datetime import datetime
+
 import re
+from datetime import datetime
 
 from . import emoji
 from . import errors
@@ -17,23 +18,25 @@ def get_resource(name):
     for resource_type, resource in iter_resources():
         if resource["name"] == name:
             return resource_type, resource
+
     raise errors.SlackCliError(
         "Channel, group or user '{}' does not exist".format(name)
     )
 
 
 def iter_resources():
-    # We should probably switch to the conversations.list method once Slacker
-    # supports it:
-    # https://api.slack.com/methods/conversations.list
-    # https://github.com/os/slacker/issues/116
     fetchers = [
-        ("channel", lambda: slack.client().channels.list().body["channels"]),
-        ("group", lambda: slack.client().groups.list().body["groups"]),
-        ("user", lambda: slack.client().users.list().body["members"]),
+        ("channel", lambda: get_named_user_channels()),
+        ("user", lambda: get_users()),
     ]
     for resource_type, fetcher in fetchers:
         for resource in fetcher():
+            if resource_type == "user" and is_user_deleted(resource):
+                continue
+
+            if is_channel_archived(resource):
+                continue
+
             yield resource_type, resource
 
 
@@ -41,27 +44,63 @@ def upload_file(path, destination_id):
     return slack.client().files.upload(path, channels=destination_id)
 
 
+def is_channel_archived(channel):
+    return "is_archived" in channel and channel["is_archived"]
+
+
+def is_user_deleted(user):
+    return user["deleted"] == True
+
+
+def get_users():
+    return slack.client().users.list().body["members"]
+
+
+def get_named_channels():
+    return (
+        slack.client()
+        .conversations.list(types="public_channel,private_channel,mpim")
+        .body["channels"]
+    )
+
+
+def get_named_user_channels():
+    return (
+        slack.client()
+        .api.get(
+            "users.conversations",
+            params={"types": "public_channel,private_channel,mpim"},
+        )
+        .body["channels"]
+    )
+
+
+def get_user_im_channel(user_id):
+    return [i for i in get_user_im_channels() if i["user"] == user_id][0]
+
+
+def get_user_im_channels():
+    return (
+        slack.client()
+        .api.get("users.conversations", params={"types": "im"})
+        .body["channels"]
+    )
+
+
 def print_messages(source_name, count=20):
     resource_type, resource = get_resource(source_name)
-    # channel->channels, group->groups, but im->im :-(
-    method_name = resource_type + "s"
-    if resource_type == "user":
-        # In case of conversation with a user, we need to find the corresponding IM object
-        resource = [
-            i
-            for i in slack.client().im.list().body["ims"]
-            if i["user"] == resource["id"]
-        ][0]
-        method_name = "im"
 
-    history = getattr(slack.client(), method_name).history
+    if resource_type == "user":
+        resource = get_user_im_channel(resource["id"])
+
+    history = getattr(slack.client(), "conversations").history
 
     messages = []
     latest = None
     while len(messages) < count:
         response_body = history(
             resource["id"],
-            count=min(count - len(messages), 1000),
+            limit=min(count - len(messages), 1000),
             latest=latest,
             inclusive=False,
         ).body
@@ -87,7 +126,7 @@ def post_message(destination_id, text, pre=False, username=None):
             return
     text = format_outgoing_message(text)
     slack.client().chat.post_message(
-        destination_id, text, as_user=(not username), username=username,
+        destination_id, text, as_user=(not username), username=username
     )
 
 
@@ -156,7 +195,7 @@ def format_incoming_message(source_name, message):
     )[0]
 
     formatted = ui.colorize(
-        "[@{} {}] ".format(source_name, time.strftime("%Y-%m-%d %H:%M:%S"),),
+        "[@{} {}] ".format(source_name, time.strftime("%Y-%m-%d %H:%M:%S")),
         ui.color(source_name),
     )
     formatted += ui.colorize("{}: ".format(username), ui.color(username), "bold")

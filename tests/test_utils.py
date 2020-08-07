@@ -24,9 +24,7 @@ class ParseStatusTests(unittest.TestCase):
         )
 
     def test_parse_empty_status(self):
-        self.assertEqual(
-            None, messaging.parse_status_update("/status"),
-        )
+        self.assertEqual(None, messaging.parse_status_update("/status"))
 
     def test_parse_clear_status(self):
         self.assertEqual(

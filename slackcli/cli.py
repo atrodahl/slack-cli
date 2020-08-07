@@ -8,10 +8,10 @@ import sys
 import argcomplete
 
 from . import errors
+from . import messaging
 from . import slack
 from . import stream
 from . import token
-from . import messaging
 
 
 def resource_completer(**kwargs):

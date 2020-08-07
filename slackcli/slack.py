@@ -1,12 +1,10 @@
 import json
-import re
 import sys
 
 import slacker
 
 from . import errors
 from . import token
-from . import messaging
 
 __all__ = ["client", "init"]
 
